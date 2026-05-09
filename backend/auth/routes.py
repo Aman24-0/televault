@@ -61,5 +61,5 @@ async def verify_otp_route(body: VerifyOTPRequest, db: AsyncSession = Depends(ge
         raise HTTPException(500, "Database save failed. Check Supabase.")
 
     if phone in _otp_store: del _otp_store[phone]
-    token = create_token(uid, fname)
+    token = create_token(uid)
     return {"token": token, "user_id": uid, "first_name": fname}
