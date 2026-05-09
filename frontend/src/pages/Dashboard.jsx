@@ -50,6 +50,11 @@ export default function Dashboard() {
   const [dragOver, setDragOver]     = useState(false)
   const [selected, setSelected]     = useState(new Set())
   const [toast,   setToast]         = useState(null)
+  
+  // NEW: Sorting States
+  const [sortBy, setSortBy]         = useState('name')
+  const [sortOrder, setSortOrder]   = useState('asc')
+
   const fileRef = useRef()
   const userId  = localStorage.getItem('tv_user_id')
   const name    = localStorage.getItem('tv_name') || 'User'
@@ -199,6 +204,33 @@ export default function Dashboard() {
   const uploadCount    = Object.keys(uploads).length
   const totalItems     = displayFolders.length + displayFiles.length
 
+  // NEW: Sorting Logic Implementation
+  const getSortedItems = (items, type) => {
+    return [...items].sort((a, b) => {
+      let valA, valB;
+      if (sortBy === 'name') {
+        valA = (a.name || '').toLowerCase();
+        valB = (b.name || '').toLowerCase();
+      } else if (sortBy === 'size' && type === 'file') {
+        valA = a.size_bytes || 0;
+        valB = b.size_bytes || 0;
+      } else if (sortBy === 'size' && type === 'folder') {
+        valA = 0; // Folders don't have direct size
+        valB = 0;
+      } else if (sortBy === 'date') {
+        valA = new Date(a.created_at || 0).getTime();
+        valB = new Date(b.created_at || 0).getTime();
+      }
+
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+  };
+
+  const sortedFolders = getSortedItems(displayFolders, 'folder');
+  const sortedFiles = getSortedItems(displayFiles, 'file');
+
   return (
     <div className="h-screen bg-[#09090b] flex flex-col overflow-hidden"
       onDragOver={e=>{e.preventDefault();setDragOver(true)}}
@@ -312,13 +344,32 @@ export default function Dashboard() {
               </motion.button>
             )}
 
-            <div className="ml-auto flex bg-white/4 border border-white/6 rounded-xl overflow-hidden">
-              {[['grid',<Grid size={14}/>],['list',<List size={14}/>]].map(([m,ic])=>(
-                <button key={m} onClick={()=>setView(m)}
-                  className={`px-3 py-2 transition-all ${viewMode===m?'bg-white/10 text-white':'text-zinc-500 hover:text-zinc-300'}`}>
-                  {ic}
-                </button>
-              ))}
+            <div className="ml-auto flex items-center gap-2">
+              {/* NEW: Sort Dropdown */}
+              <select 
+                value={`${sortBy}-${sortOrder}`} 
+                onChange={e => {
+                  const [newSortBy, newSortOrder] = e.target.value.split('-');
+                  setSortBy(newSortBy); 
+                  setSortOrder(newSortOrder);
+                }} 
+                className="hidden md:block bg-white/4 border border-white/6 hover:bg-white/8 text-zinc-300 text-sm rounded-xl px-3 py-2 outline-none transition-all cursor-pointer">
+                <option value="name-asc" className="bg-[#18181b]">Name (A-Z)</option>
+                <option value="name-desc" className="bg-[#18181b]">Name (Z-A)</option>
+                <option value="size-desc" className="bg-[#18181b]">Size (Largest)</option>
+                <option value="size-asc" className="bg-[#18181b]">Size (Smallest)</option>
+                <option value="date-desc" className="bg-[#18181b]">Newest First</option>
+                <option value="date-asc" className="bg-[#18181b]">Oldest First</option>
+              </select>
+
+              <div className="flex bg-white/4 border border-white/6 rounded-xl overflow-hidden">
+                {[['grid',<Grid size={14}/>],['list',<List size={14}/>]].map(([m,ic])=>(
+                  <button key={m} onClick={()=>setView(m)}
+                    className={`px-3 py-2 transition-all ${viewMode===m?'bg-white/10 text-white':'text-zinc-500 hover:text-zinc-300'}`}>
+                    {ic}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <span className="text-zinc-700 text-xs hidden md:block">{totalItems} items</span>
@@ -376,7 +427,8 @@ export default function Dashboard() {
             </motion.div>
           ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-              {displayFolders.map((f,i)=>(
+              {/* UPDATED: Mapping sortedFolders and sortedFiles */}
+              {sortedFolders.map((f,i)=>(
                 <FolderCard key={f.id} folder={f} index={i}
                   onOpen={()=>setCurrent(f.id)}
                   onRename={()=>startRename(f,'folder')}
@@ -388,8 +440,8 @@ export default function Dashboard() {
                   renameVal={renameVal} setRenameVal={setRenameVal}
                   doRename={doRename} cancelRename={()=>setRenaming(null)}/>
               ))}
-              {displayFiles.map((f,i)=>(
-                <FileCard key={f.id} file={f} index={displayFolders.length+i}
+              {sortedFiles.map((f,i)=>(
+                <FileCard key={f.id} file={f} index={sortedFolders.length+i}
                   onView={()=>setViewer(f)}
                   onRename={()=>startRename(f,'file')}
                   onDelete={()=>deleteFile(f.id)}
@@ -411,7 +463,8 @@ export default function Dashboard() {
                 <div className="col-span-2 hidden lg:block">Type</div>
                 <div className="col-span-2 text-right">Actions</div>
               </div>
-              {displayFolders.map((f,i)=>(
+              {/* UPDATED: Mapping sortedFolders and sortedFiles */}
+              {sortedFolders.map((f,i)=>(
                 <motion.div key={f.id} initial={{opacity:0}} animate={{opacity:1}} transition={{delay:i*0.02}}
                   className={`grid grid-cols-12 gap-3 px-5 py-3.5 border-b border-white/4 hover:bg-white/[0.02] transition-colors items-center cursor-pointer ${selected.has(f.id)?'bg-indigo-500/5':''}`}
                   onClick={()=>selected.size>0?toggleSelect(f.id):setCurrent(f.id)}>
@@ -435,8 +488,8 @@ export default function Dashboard() {
                   </div>
                 </motion.div>
               ))}
-              {displayFiles.map((f,i)=>(
-                <motion.div key={f.id} initial={{opacity:0}} animate={{opacity:1}} transition={{delay:(displayFolders.length+i)*0.02}}
+              {sortedFiles.map((f,i)=>(
+                <motion.div key={f.id} initial={{opacity:0}} animate={{opacity:1}} transition={{delay:(sortedFolders.length+i)*0.02}}
                   className={`grid grid-cols-12 gap-3 px-5 py-3.5 border-b border-white/4 last:border-0 hover:bg-white/[0.02] transition-colors items-center cursor-pointer ${selected.has(f.id)?'bg-indigo-500/5':''}`}
                   onClick={()=>selected.size>0?toggleSelect(f.id):setViewer(f)}>
                   <div className="col-span-6 flex items-center gap-3">
