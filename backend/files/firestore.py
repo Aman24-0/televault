@@ -11,6 +11,20 @@ from typing import Optional
 import jwt  # PyJWT
 from config import FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
 
+# Only initialize if credentials exist to prevent startup crashes
+if FIREBASE_PROJECT_ID and FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY:
+    cred = credentials.Certificate({
+        "project_id": FIREBASE_PROJECT_ID,
+        "client_email": FIREBASE_CLIENT_EMAIL,
+        "private_key": FIREBASE_PRIVATE_KEY,
+    })
+    if not firebase_admin._apps:
+        firebase_admin.initialize_app(cred)
+    db = firestore.client()
+else:
+    print("⚠️ Firebase credentials missing. Firestore features will be disabled.")
+    db = None
+
 # ── Token cache ─────────────────────────────────────────────
 
 _token_cache = {"token": None, "expires_at": 0}
