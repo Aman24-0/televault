@@ -1,25 +1,40 @@
 """
-TeleVault v2 - SQLite Database
-No Firebase. No grpcio. Pure local SQLite.
+TeleVault v2 - Turso (LibSQL) Database
+Persistent cloud SQLite — survives Render redeploys
 """
-import aiosqlite
-import asyncio
+import libsql_experimental as libsql
+import os
 from config import DB_PATH
+
+# Turso cloud config
+TURSO_URL   = os.getenv("TURSO_URL", "")
+TURSO_TOKEN = os.getenv("TURSO_TOKEN", "")
 
 _db = None
 
-async def get_db() -> aiosqlite.Connection:
+async def get_db():
     global _db
-    if _db is None:
-        _db = await aiosqlite.connect(DB_PATH)
-        _db.row_factory = aiosqlite.Row
-        await _db.execute("PRAGMA journal_mode=WAL")
-        await _db.execute("PRAGMA synchronous=NORMAL")
+    if _db is not None:
+        return _db
+
+    if TURSO_URL and TURSO_TOKEN:
+        # Cloud Turso
+        _db = libsql.connect(
+            database=TURSO_URL,
+            auth_token=TURSO_TOKEN,
+        )
+        print("✅ Connected to Turso cloud database")
+    else:
+        # Local fallback (development)
+        _db = libsql.connect(DB_PATH)
+        print("⚠️  Using local SQLite (data will reset on redeploy)")
+
+    await _init_tables(_db)
     return _db
 
-async def init_db():
-    db = await get_db()
-    await db.executescript("""
+
+async def _init_tables(db):
+    await db.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id          TEXT PRIMARY KEY,
             phone       TEXT UNIQUE NOT NULL,
@@ -27,18 +42,19 @@ async def init_db():
             tg_user_id  INTEGER UNIQUE,
             session     TEXT NOT NULL,
             created_at  TEXT DEFAULT (datetime('now'))
-        );
-
+        )
+    """)
+    await db.execute("""
         CREATE TABLE IF NOT EXISTS folders (
             id          TEXT PRIMARY KEY,
             name        TEXT NOT NULL,
             parent_id   TEXT NOT NULL DEFAULT 'root',
             user_id     TEXT NOT NULL,
             color       TEXT DEFAULT '#818CF8',
-            created_at  TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-
+            created_at  TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    await db.execute("""
         CREATE TABLE IF NOT EXISTS files (
             id                  TEXT PRIMARY KEY,
             name                TEXT NOT NULL,
@@ -54,21 +70,27 @@ async def init_db():
             upload_status       TEXT DEFAULT 'pending',
             share_token         TEXT,
             share_enabled       INTEGER DEFAULT 0,
-            created_at          TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_files_user_parent   ON files(user_id, parent_id);
-        CREATE INDEX IF NOT EXISTS idx_folders_user_parent ON folders(user_id, parent_id);
-        CREATE INDEX IF NOT EXISTS idx_files_share_token   ON files(share_token);
+            created_at          TEXT DEFAULT (datetime('now'))
+        )
     """)
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_files_user_parent ON files(user_id, parent_id)")
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_folders_user_parent ON folders(user_id, parent_id)")
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_files_share ON files(share_token)")
     await db.commit()
-    print("✅ Database initialized")
+    print("✅ Database tables ready")
+
+
+async def init_db():
+    await get_db()
+
 
 async def row_to_dict(row) -> dict:
     if row is None:
         return None
     return dict(row)
 
+
 async def rows_to_list(rows) -> list:
+    if not rows:
+        return []
     return [dict(r) for r in rows]
