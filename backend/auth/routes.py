@@ -4,9 +4,9 @@ from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
-from core.database import get_db, row_to_dict
-from core.security import create_token, get_current_user 
-from core.telegram_pool import start_otp, verify_otp, remove_client
+from core.database import get_db
+from core.security import create_token
+from core.telegram_pool import start_otp, verify_otp
 
 router = APIRouter()
 _otp_store: dict = {}
@@ -43,7 +43,6 @@ async def verify_otp_route(body: VerifyOTPRequest, db: AsyncSession = Depends(ge
 
     try:
         uid = secrets.token_urlsafe(16)
-        # Check existing user with SQLAlchemy syntax
         res = await db.execute(text("SELECT id FROM users WHERE tg_user_id = :tg"), {"tg": tg_id})
         row = res.fetchone()
 
@@ -58,8 +57,9 @@ async def verify_otp_route(body: VerifyOTPRequest, db: AsyncSession = Depends(ge
         await db.commit()
     except Exception as e:
         print(f"CRITICAL DB ERROR: {e}")
-        raise HTTPException(500, "Database save failed. Check Supabase.")
+        raise HTTPException(500, f"Database save failed: {e}")
 
     if phone in _otp_store: del _otp_store[phone]
-    token = create_token(uid)
+    # Fixed: Only passing uid to match core/security.py definition
+    token = create_token(uid) 
     return {"token": token, "user_id": uid, "first_name": fname}
