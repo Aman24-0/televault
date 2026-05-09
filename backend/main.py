@@ -1,5 +1,5 @@
 """
-TeleVault v2 - Main App
+TeleVault v2 - Main App (CORS Fixed)
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,10 +21,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="TeleVault API v2", version="2.0.0", lifespan=lifespan)
 
-# CORS - allow configured frontend + localhost for dev
-FRONTEND_URL  = os.getenv("FRONTEND_URL", "http://localhost:5173")
+# DYNAMIC CORS SETUP
+frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+# Agar URL ke peeche '/' hai toh use hata deta hai (Common error)
+if frontend_url.endswith('/'):
+    frontend_url = frontend_url[:-1]
+
 ALLOWED_ORIGINS = [
-    FRONTEND_URL,
+    frontend_url,
+    "https://televaultv2.netlify.app", # Direct Netlify link as fallback
     "http://localhost:5173",
     "http://localhost:4173",
 ]
@@ -35,6 +41,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"] # Yeh streaming/download headers ke liye zaroori hai
 )
 
 app.include_router(auth_router,    prefix="/api/auth",  tags=["Auth"])
