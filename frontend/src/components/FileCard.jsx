@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { Image, Film, Music, Archive, FileText, Download, Share2, Trash2, Edit2, Move, CheckSquare, Square, Loader2 } from 'lucide-react'
+import { Image, Film, Music, Archive, FileText, Download, Share2, Trash2, Edit2, Move, CheckSquare, Square, Loader2, RotateCcw } from 'lucide-react'
 import { formatSize, fileTypeInfo, thumbCache } from '../lib/utils'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-export default function FileCard({ file, onView, onRename, onDelete, onShare, onMove, index=0, renaming, renameVal, setRenameVal, doRename, cancelRename, isSelected, onToggleSelect }) {
+export default function FileCard({ file, onView, onRename, onDelete, onShare, onMove, onRestore, isTrash, index=0, renaming, renameVal, setRenameVal, doRename, cancelRename, isSelected, onToggleSelect }) {
   const [menu,  setMenu]  = useState(false)
   const [thumb, setThumb] = useState(thumbCache[file.id] || null)
   const [tl,    setTl]    = useState(!thumbCache[file.id] && !!file.thumbnail_msg_id)
@@ -42,8 +42,8 @@ export default function FileCard({ file, onView, onRename, onDelete, onShare, on
     <motion.div
       initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }}
       transition={{ duration:0.2, delay:Math.min(index*0.03,0.3), ease:'easeOut' }}
-      className={`group relative flex flex-col bg-white/[0.02] border ${isSelected?'border-indigo-500/60 bg-indigo-500/5':'border-white/5 hover:border-white/10 hover:bg-white/[0.03]'} rounded-2xl overflow-hidden transition-colors duration-150 cursor-pointer select-none`}
-      onClick={() => renaming ? null : isSelected ? onToggleSelect() : onView()}
+      className={`group relative flex flex-col bg-white/[0.02] border ${isSelected?'border-indigo-500/60 bg-indigo-500/5':'border-white/5 hover:border-white/10 hover:bg-white/[0.03]'} rounded-2xl overflow-hidden transition-colors duration-150 cursor-pointer select-none ${isTrash ? 'opacity-80' : ''}`}
+      onClick={() => renaming ? null : isSelected ? onToggleSelect() : (isTrash ? null : onView())}
     >
       {/* Checkbox */}
       <div className="absolute top-2 left-2 z-10" onClick={e=>{e.stopPropagation();onToggleSelect()}}>
@@ -90,22 +90,31 @@ export default function FileCard({ file, onView, onRename, onDelete, onShare, on
       {menu && (
         <div className="absolute right-1 bottom-12 bg-[#1c1c1f]/96 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl z-[100] py-1 min-w-[140px] animate-scale-in"
           onMouseLeave={()=>setMenu(false)}>
-          {[
-            { icon:<Download size={12}/>, label:'Download', fn:()=>{download();setMenu(false)} },
-            { icon:<Share2 size={12}/>,   label:'Share',    fn:()=>{onShare();setMenu(false)} },
-            { icon:<Move size={12}/>,     label:'Move',     fn:()=>{onMove();setMenu(false)} },
-            { icon:<Edit2 size={12}/>,    label:'Rename',   fn:()=>{onRename();setMenu(false)} },
-          ].map(it=>(
-            <button key={it.label} onClick={e=>{e.stopPropagation();it.fn()}}
-              className="flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-zinc-300 hover:bg-white/8 hover:text-white transition-colors text-left">
-              {it.icon} {it.label}
+          {isTrash ? (
+            <button onClick={e=>{e.stopPropagation();onRestore();setMenu(false)}}
+              className="flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-emerald-400 hover:bg-emerald-500/10 transition-colors text-left">
+              <RotateCcw size={12}/> Restore File
             </button>
-          ))}
-          <div className="h-px bg-white/5 my-1"/>
-          <button onClick={e=>{e.stopPropagation();onDelete();setMenu(false)}}
-            className="flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-red-400 hover:bg-red-500/8 transition-colors text-left">
-            <Trash2 size={12}/> Delete
-          </button>
+          ) : (
+            <>
+              {[
+                { icon:<Download size={12}/>, label:'Download', fn:()=>{download();setMenu(false)} },
+                { icon:<Share2 size={12}/>,   label:'Share',    fn:()=>{onShare();setMenu(false)} },
+                { icon:<Move size={12}/>,     label:'Move',     fn:()=>{onMove();setMenu(false)} },
+                { icon:<Edit2 size={12}/>,    label:'Rename',   fn:()=>{onRename();setMenu(false)} },
+              ].map(it=>(
+                <button key={it.label} onClick={e=>{e.stopPropagation();it.fn()}}
+                  className="flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-zinc-300 hover:bg-white/8 hover:text-white transition-colors text-left">
+                  {it.icon} {it.label}
+                </button>
+              ))}
+              <div className="h-px bg-white/5 my-1"/>
+              <button onClick={e=>{e.stopPropagation();onDelete();setMenu(false)}}
+                className="flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-red-400 hover:bg-red-500/8 transition-colors text-left">
+                <Trash2 size={12}/> Delete
+              </button>
+            </>
+          )}
         </div>
       )}
     </motion.div>
