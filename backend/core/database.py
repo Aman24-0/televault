@@ -35,6 +35,7 @@ async def init_db():
             parent_id   TEXT NOT NULL DEFAULT 'root',
             user_id     TEXT NOT NULL,
             color       TEXT DEFAULT '#818CF8',
+            is_trashed  INTEGER DEFAULT 0,
             created_at  TEXT DEFAULT (datetime('now')),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
@@ -54,6 +55,7 @@ async def init_db():
             upload_status       TEXT DEFAULT 'pending',
             share_token         TEXT,
             share_enabled       INTEGER DEFAULT 0,
+            is_trashed          INTEGER DEFAULT 0,
             created_at          TEXT DEFAULT (datetime('now')),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
@@ -62,8 +64,20 @@ async def init_db():
         CREATE INDEX IF NOT EXISTS idx_folders_user_parent ON folders(user_id, parent_id);
         CREATE INDEX IF NOT EXISTS idx_files_share_token   ON files(share_token);
     """)
+    
+    # Safe migration: Automatically add is_trashed column if it doesn't exist
+    try:
+        await db.execute("ALTER TABLE files ADD COLUMN is_trashed INTEGER DEFAULT 0")
+    except:
+        pass # Ignore if column already exists
+        
+    try:
+        await db.execute("ALTER TABLE folders ADD COLUMN is_trashed INTEGER DEFAULT 0")
+    except:
+        pass # Ignore if column already exists
+        
     await db.commit()
-    print("✅ Database initialized")
+    print("✅ Database initialized with Recycle Bin support")
 
 async def row_to_dict(row) -> dict:
     if row is None:
