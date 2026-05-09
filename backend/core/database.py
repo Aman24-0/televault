@@ -1,21 +1,20 @@
 """
 TeleVault v2 - SQLite Database
-Fixed: get_db() is a regular async function, not a generator
+No Firebase. No grpcio. Pure local SQLite.
 """
 import aiosqlite
+import asyncio
 from config import DB_PATH
 
 _db = None
 
 async def get_db() -> aiosqlite.Connection:
-    """Returns the singleton DB connection. Creates it if not exists."""
     global _db
     if _db is None:
         _db = await aiosqlite.connect(DB_PATH)
         _db.row_factory = aiosqlite.Row
         await _db.execute("PRAGMA journal_mode=WAL")
         await _db.execute("PRAGMA synchronous=NORMAL")
-        await _db.execute("PRAGMA foreign_keys=ON")
     return _db
 
 async def init_db():
