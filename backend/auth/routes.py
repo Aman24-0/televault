@@ -1,23 +1,18 @@
-"""
-TeleVault v2 - Auth Routes
-POST /api/auth/send-code   - Send OTP to phone
-POST /api/auth/verify-otp  - Verify OTP -> JWT
-GET  /api/auth/me          - Get current user
-POST /api/auth/logout      - Logout
-"""
 import secrets
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
+
 from core.database import get_db, row_to_dict
-from core.security import create_token, get_current_user
+from core.security import create_token, get_current_user 
 from core.telegram_pool import start_otp, verify_otp, remove_client
 
 router = APIRouter()
 
 # In-memory OTP hash store: phone -> phone_code_hash
 _otp_store: dict = {}
-
 
 class SendCodeRequest(BaseModel):
     phone: str
@@ -26,7 +21,6 @@ class VerifyOTPRequest(BaseModel):
     phone: str
     code: str
     password: Optional[str] = None  # For 2FA users
-
 
 @router.post("/send-code")
 async def send_code(body: SendCodeRequest):
@@ -40,9 +34,8 @@ async def send_code(body: SendCodeRequest):
     except Exception as e:
         raise HTTPException(400, f"Failed to send OTP: {e}")
 
-
 @router.post("/verify-otp")
-async def verify_otp_route(body: VerifyOTPRequest):
+async def verify_otp_route(body: VerifyOTPRequest, db: AsyncSession = Depends(get_db)):
     phone = body.phone.strip()
     hash_ = _otp_store.get(phone)
     if not hash_:
@@ -57,34 +50,37 @@ async def verify_otp_route(body: VerifyOTPRequest):
             raise HTTPException(428, "2FA password required")
         raise HTTPException(400, f"OTP verification failed: {e}")
 
-    # Upsert user in DB
-    db = await get_db()
+    # Upsert user in DB using PostgreSQL (SQLAlchemy text format)
     user_id = secrets.token_urlsafe(16)
 
     # Check if user already exists by tg_user_id
     existing = await db.execute(
-        "SELECT id FROM users WHERE tg_user_id = ?", (tg_user_id,)
+        text("SELECT id FROM users WHERE tg_user_id = :tg"),
+        {"tg": tg_user_id}
     )
-    row = await existing.fetchone()
+    row = existing.fetchone()
 
     if row:
-        user_id = row["id"]
+        user_id = row._mapping["id"]
         await db.execute(
-            "UPDATE users SET session=?, first_name=?, phone=? WHERE id=?",
-            (session_str, first_name, phone, user_id)
+            text("UPDATE users SET session=:session, first_name=:fname, phone=:phone WHERE id=:uid"),
+            {"session": session_str, "fname": first_name, "phone": phone, "uid": user_id}
         )
     else:
         await db.execute(
-            "INSERT INTO users (id, phone, first_name, tg_user_id, session) VALUES (?,?,?,?,?)",
-            (user_id, phone, first_name, tg_user_id, session_str)
+            text("INSERT INTO users (id, phone, first_name, tg_user_id, session) VALUES (:uid, :phone, :fname, :tg, :session)"),
+            {"uid": user_id, "phone": phone, "fname": first_name, "tg": tg_user_id, "session": session_str}
         )
 
     await db.commit()
 
     # Clean up OTP store
-    del _otp_store[phone]
+    if phone in _otp_store:
+        del _otp_store[phone]
 
-    token = create_token(user_id)
+    # create_token requires 2 arguments based on your utils.py
+    token = create_token(user_id, first_name)
+    
     return {
         "token": token,
         "user_id": user_id,
@@ -92,18 +88,16 @@ async def verify_otp_route(body: VerifyOTPRequest):
         "phone": phone,
     }
 
-
 @router.get("/me")
-async def get_me(user=Depends(get_current_user)):
-    db = await get_db()
-    row = await (await db.execute(
-        "SELECT id, phone, first_name, created_at FROM users WHERE id=?",
-        (user["user_id"],)
-    )).fetchone()
+async def get_me(user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    res = await db.execute(
+        text("SELECT id, phone, first_name, created_at FROM users WHERE id=:uid"),
+        {"uid": user["user_id"]}
+    )
+    row = res.fetchone()
     if not row:
         raise HTTPException(404, "User not found")
-    return dict(row)
-
+    return row_to_dict(row)
 
 @router.post("/logout")
 async def logout(user=Depends(get_current_user)):
