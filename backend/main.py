@@ -13,6 +13,7 @@ app = FastAPI(title="TeleVault API")
 origins = [
     "https://televaultv2.netlify.app",
     "http://localhost:5173",
+    "http://localhost:4173",
 ]
 
 app.add_middleware(
