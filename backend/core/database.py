@@ -8,15 +8,13 @@ load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Engine setup with SSL and Timeout fixes
+# Supabase stable connection engine
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
     pool_pre_ping=True,
     pool_recycle=300,
-    connect_args={
-        "command_timeout": 60
-    }
+    connect_args={"ssl": "require"} # Supabase ke liye zaroori
 )
 
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -28,7 +26,7 @@ async def get_db():
 async def init_db():
     try:
         async with engine.begin() as conn:
-            # Users Table
+            # Users table setup
             await conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS users (
                     id TEXT PRIMARY KEY,
@@ -39,7 +37,7 @@ async def init_db():
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """))
-            # Folders Table
+            # Folders table setup
             await conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS folders (
                     id TEXT PRIMARY KEY,
@@ -52,7 +50,7 @@ async def init_db():
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                 );
             """))
-            # Files Table
+            # Files table setup
             await conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS files (
                     id TEXT PRIMARY KEY,
@@ -74,11 +72,10 @@ async def init_db():
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                 );
             """))
-        print("✅ Supabase Connected Successfully")
+        print("✅ Supabase tables are ready!")
     except Exception as e:
-        print(f"❌ Database Connection Error: {str(e)}")
+        print(f"❌ DB Init Error: {e}")
 
-# Helper functions for Routes
 def row_to_dict(row):
     if row is None: return None
     return dict(row._mapping)
