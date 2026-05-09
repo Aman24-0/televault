@@ -253,3 +253,12 @@ async def breadcrumb(folder_id: str, user=Depends(get_current_user)):
         crumbs.insert(0, {"id": row["id"], "name": row["name"]})
         current = row["parent_id"]
     return {"breadcrumb": crumbs}
+
+
+@router.get("/trash")
+async def get_trash(user=Depends(get_current_user)):
+    return {"files": [], "folders": []}
+
+@router.delete("/trash")
+async def empty_trash(user=Depends(get_current_user)):
+    return {"deleted": 0}
