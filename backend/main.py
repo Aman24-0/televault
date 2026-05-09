@@ -16,7 +16,8 @@ from websocket.manager import router as ws_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_db()
+    from core.database import init_db
+    await init_db() # PostgreSQL tables yahan banenge
     yield
 
 app = FastAPI(title="TeleVault API v2", version="2.0.0", lifespan=lifespan)
