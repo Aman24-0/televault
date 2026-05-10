@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import SharePage from './pages/SharePage'
+import ConnectTelegram from './pages/ConnectTelegram'
 import PWABanner from './components/PWABanner'
 
 const Guard = ({ children }) =>
@@ -13,9 +14,10 @@ export default function App() {
     <BrowserRouter>
       <PWABanner />
       <Routes>
-        <Route path="/login"        element={<Login />} />
-        <Route path="/share/:token" element={<SharePage />} />
-        <Route path="/*"            element={<Guard><Dashboard /></Guard>} />
+        <Route path="/login"             element={<Login />} />
+        <Route path="/share/:token"      element={<SharePage />} />
+        <Route path="/connect-telegram"  element={<Guard><ConnectTelegram /></Guard>} />
+        <Route path="/*"                 element={<Guard><Dashboard /></Guard>} />
       </Routes>
     </BrowserRouter>
   )
