@@ -1,9 +1,5 @@
 """
-TeleVault v2 - Auth Routes
-POST /api/auth/send-code   - Send OTP to phone
-POST /api/auth/verify-otp  - Verify OTP -> JWT
-GET  /api/auth/me          - Get current user
-POST /api/auth/logout      - Logout
+TeleVault v2 - Auth Routes (PostgreSQL version)
 """
 import secrets
 from fastapi import APIRouter, HTTPException, Depends
@@ -14,10 +10,7 @@ from core.security import create_token, get_current_user
 from core.telegram_pool import start_otp, verify_otp, remove_client
 
 router = APIRouter()
-
-# In-memory OTP hash store: phone -> phone_code_hash
 _otp_store: dict = {}
-
 
 class SendCodeRequest(BaseModel):
     phone: str
@@ -25,7 +18,7 @@ class SendCodeRequest(BaseModel):
 class VerifyOTPRequest(BaseModel):
     phone: str
     code: str
-    password: Optional[str] = None  # For 2FA users
+    password: Optional[str] = None
 
 
 @router.post("/send-code")
@@ -47,7 +40,6 @@ async def verify_otp_route(body: VerifyOTPRequest):
     hash_ = _otp_store.get(phone)
     if not hash_:
         raise HTTPException(400, "No OTP requested. Call /send-code first.")
-
     try:
         session_str, tg_user_id, first_name = await verify_otp(
             phone, body.code.strip(), hash_, body.password
@@ -57,51 +49,39 @@ async def verify_otp_route(body: VerifyOTPRequest):
             raise HTTPException(428, "2FA password required")
         raise HTTPException(400, f"OTP verification failed: {e}")
 
-    # Upsert user in DB
-    db = await get_db()
+    pool = await get_db()
     user_id = secrets.token_urlsafe(16)
 
-    # Check if user already exists by tg_user_id
-    existing = await db.execute(
-        "SELECT id FROM users WHERE tg_user_id = ?", (tg_user_id,)
-    )
-    row = await existing.fetchone()
-
-    if row:
-        user_id = row["id"]
-        await db.execute(
-            "UPDATE users SET session=?, first_name=?, phone=? WHERE id=?",
-            (session_str, first_name, phone, user_id)
+    async with pool.acquire() as db:
+        existing = await db.fetchrow(
+            "SELECT id FROM users WHERE tg_user_id=$1", tg_user_id
         )
-    else:
-        await db.execute(
-            "INSERT INTO users (id, phone, first_name, tg_user_id, session) VALUES (?,?,?,?,?)",
-            (user_id, phone, first_name, tg_user_id, session_str)
-        )
+        if existing:
+            user_id = existing["id"]
+            await db.execute(
+                "UPDATE users SET session=$1, first_name=$2, phone=$3 WHERE id=$4",
+                session_str, first_name, phone, user_id
+            )
+        else:
+            await db.execute(
+                "INSERT INTO users (id,phone,first_name,tg_user_id,session) VALUES ($1,$2,$3,$4,$5)",
+                user_id, phone, first_name, tg_user_id, session_str
+            )
 
-    await db.commit()
-
-    # Clean up OTP store
     del _otp_store[phone]
-
     token = create_token(user_id)
-    return {
-        "token": token,
-        "user_id": user_id,
-        "first_name": first_name,
-        "phone": phone,
-    }
+    return {"token": token, "user_id": user_id, "first_name": first_name, "phone": phone}
 
 
 @router.get("/me")
 async def get_me(user=Depends(get_current_user)):
-    db = await get_db()
-    row = await (await db.execute(
-        "SELECT id, phone, first_name, created_at FROM users WHERE id=?",
-        (user["user_id"],)
-    )).fetchone()
-    if not row:
-        raise HTTPException(404, "User not found")
+    pool = await get_db()
+    async with pool.acquire() as db:
+        row = await db.fetchrow(
+            "SELECT id, phone, first_name, created_at FROM users WHERE id=$1",
+            user["user_id"]
+        )
+    if not row: raise HTTPException(404, "User not found")
     return dict(row)
 
 
