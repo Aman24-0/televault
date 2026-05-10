@@ -371,7 +371,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <button 
-                onClick={() => navigate('/login')}
+                onClick={() => navigate('/connect-telegram')}
                 className="bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold px-4 py-2 rounded-lg transition-all shrink-0"
               >
                 Connect Now
