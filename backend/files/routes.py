@@ -19,10 +19,12 @@ class FolderUpdate(BaseModel):
     name: Optional[str] = None
     parent_id: Optional[str] = None
     color: Optional[str] = None
+    is_starred: Optional[bool] = None  # NEW: For Starred feature
 
 class FileUpdate(BaseModel):
     name: Optional[str] = None
     parent_id: Optional[str] = None
+    is_starred: Optional[bool] = None  # NEW: For Starred feature
 
 class ShareToggle(BaseModel):
     enabled: bool
@@ -187,10 +189,7 @@ async def delete_file(file_id: str, permanent: bool = False, user=Depends(get_cu
         if not row: raise HTTPException(404, "File not found")
 
         if row["parent_id"] == "trash" or permanent:
-            # Delete entry from DB
             await db.execute("DELETE FROM files WHERE id=$1 AND user_id=$2", file_id, user["user_id"])
-            
-            # CHECK REFERENCE COUNT before deleting from Telegram
             msg_ids_to_delete = []
             
             if row["telegram_message_id"]:
@@ -254,6 +253,15 @@ async def breadcrumb(folder_id: str, user=Depends(get_current_user)):
             current = row["parent_id"]
     return {"breadcrumb": crumbs}
 
+# ── NEW: Starred ─────────────────────────────────────────────
+@router.get("/starred")
+async def get_starred(user=Depends(get_current_user)):
+    pool = await get_db()
+    async with pool.acquire() as db:
+        files = await db.fetch("SELECT * FROM files WHERE user_id=$1 AND is_starred=TRUE AND parent_id != 'trash' ORDER BY created_at DESC", user["user_id"])
+        folders = await db.fetch("SELECT * FROM folders WHERE user_id=$1 AND is_starred=TRUE AND parent_id != 'trash' ORDER BY name", user["user_id"])
+    return {"files": await rows_to_list(files), "folders": await rows_to_list(folders)}
+
 
 # ── Trash & Restore ──────────────────────────────────────────
 
@@ -268,16 +276,13 @@ async def get_trash(user=Depends(get_current_user)):
 
 @router.delete("/trash")
 async def empty_trash(user=Depends(get_current_user)):
-    """Permanently delete all items in trash safely"""
     pool = await get_db()
     async with pool.acquire() as db:
         files = await db.fetch("SELECT telegram_message_id, thumbnail_msg_id FROM files WHERE user_id=$1 AND parent_id='trash'", user["user_id"])
         
-        # Delete from DB first
         await db.execute("DELETE FROM files WHERE user_id=$1 AND parent_id='trash'", user["user_id"])
         await db.execute("DELETE FROM folders WHERE user_id=$1 AND parent_id='trash'", user["user_id"])
 
-        # Check references for each file before deciding to delete from Telegram
         msg_ids_to_delete = []
         for f in files:
             if f["telegram_message_id"]:
@@ -291,7 +296,6 @@ async def empty_trash(user=Depends(get_current_user)):
                     msg_ids_to_delete.append(f["thumbnail_msg_id"])
 
         if msg_ids_to_delete:
-            # Remove duplicate IDs
             msg_ids_to_delete = list(set(msg_ids_to_delete))
             import asyncio
             asyncio.create_task(_delete_tg(user["user_id"], msg_ids_to_delete))
@@ -301,7 +305,6 @@ async def empty_trash(user=Depends(get_current_user)):
 
 @router.post("/restore/{item_id}")
 async def restore_item(item_id: str, type: str, user=Depends(get_current_user)):
-    """Restore file or folder from trash to root"""
     pool = await get_db()
     table = "files" if type == "file" else "folders"
     async with pool.acquire() as db:

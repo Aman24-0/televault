@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Folder, Edit2, Trash2, Move, CheckSquare, Square, ChevronRight, RotateCcw } from 'lucide-react'
+import { Folder, Edit2, Trash2, Move, CheckSquare, Square, ChevronRight, RotateCcw, Star } from 'lucide-react'
 
-export default function FolderCard({ folder, onOpen, onRename, onDelete, onMove, onRestore, isTrash, index=0, renaming, renameVal, setRenameVal, doRename, cancelRename, isSelected, onToggleSelect }) {
+export default function FolderCard({ folder, onOpen, onRename, onDelete, onMove, onRestore, onToggleStar, isTrash, index=0, renaming, renameVal, setRenameVal, doRename, cancelRename, isSelected, onToggleSelect }) {
   const [menu, setMenu] = useState(false)
 
   return (
@@ -18,6 +18,14 @@ export default function FolderCard({ folder, onOpen, onRename, onDelete, onMove,
           ? <CheckSquare size={14} className="text-indigo-400"/>
           : <Square size={14} className="text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity"/>}
       </div>
+
+      {/* Star Button */}
+      {!isTrash && (
+        <button onClick={e=>{e.stopPropagation(); onToggleStar && onToggleStar(folder.id, !folder.is_starred)}}
+          className={`absolute top-2.5 right-8 z-10 transition-all p-1 hover:bg-white/8 rounded-lg ${folder.is_starred ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+          <Star size={14} className={folder.is_starred ? "text-amber-400 fill-amber-400" : "text-zinc-500 hover:text-amber-400"} />
+        </button>
+      )}
 
       {/* Menu btn */}
       <button onClick={e=>{e.stopPropagation();setMenu(m=>!m)}}
