@@ -6,3 +6,29 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Service Worker - must not be cached
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    Content-Type = "application/javascript"
+
+# Manifest
+[[headers]]
+  for = "/manifest.json"
+  [headers.values]
+    Content-Type = "application/manifest+json"
+    Cache-Control = "public, max-age=3600"
+
+# Icons - long cache
+[[headers]]
+  for = "/icons/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# HTML - no cache
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "no-cache"
