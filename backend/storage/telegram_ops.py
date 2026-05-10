@@ -25,15 +25,20 @@ async def _get_user_client(user_id: str) -> TelegramClient:
 
 async def upload_file(
     user_id: str,
-    file_bytes: bytes,
+    file_data, # NEW: Can be bytes or str (filepath) for chunked uploads
     filename: str,
     mime_type: str,
     progress_callback=None
 ) -> dict:
     client   = await _get_user_client(user_id)
-    file_obj = io.BytesIO(file_bytes)
-    file_obj.name = filename
-
+    
+    # Check if data is bytes (old method) or file path (new method)
+    if isinstance(file_data, bytes):
+        file_obj = io.BytesIO(file_data)
+        file_obj.name = filename
+    else:
+        file_obj = file_data # Telethon supports reading directly from filepath string
+        
     message = await client.send_file(
         STORAGE_ENTITY,
         file_obj,
