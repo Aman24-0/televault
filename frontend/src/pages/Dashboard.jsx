@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+// FIX: Added 'Folder' and 'Edit2' to the imports below!
 import {
   CloudLightning, Upload, FolderPlus, Grid, List,
   Search, X, Home, ChevronRight, Check, Loader2,
   LogOut, Copy, Share2, CheckCircle, Trash2, Move,
-  AlertCircle, RotateCcw, Star, Download, PieChart, Lock, Clock, Plus
+  AlertCircle, RotateCcw, Star, Download, PieChart, Lock, Clock, Plus, Folder, Edit2
 } from 'lucide-react'
 import { auth } from '../lib/firebase'
 import { signOut } from 'firebase/auth'
