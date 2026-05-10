@@ -58,6 +58,13 @@ export default function Dashboard() {
   const fileRef = useRef()
   const userId  = localStorage.getItem('tv_user_id')
   const name    = localStorage.getItem('tv_name') || 'User'
+  const [tgConnected, setTgConnected] = useState(true)
+
+  useEffect(() => {
+    api.get('/api/auth/me').then(res => {
+      setTgConnected(res.data.session !== 'PLACEHOLDER_SESSION')
+    }).catch(() => {})
+  }, [])
 
   const onWsMsg = useCallback((data) => {
     if (activeTab !== 'files') return;
@@ -132,6 +139,10 @@ export default function Dashboard() {
 
   const handleUpload = async (fileList) => {
     if (activeTab !== 'files') return;
+    if (!tgConnected) {
+      showToast('Please connect your Telegram account first', 'error')
+      return
+    }
     const files = Array.from(fileList)
     await Promise.all(files.map(file => {
       const fd = new FormData()
@@ -347,12 +358,35 @@ export default function Dashboard() {
             )}
           </div>
 
+          {/* Telegram Connection Alert */}
+          {!tgConnected && !isTrash && (
+            <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center text-amber-500 shrink-0">
+                  <AlertCircle size={20} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">Telegram Not Connected</h4>
+                  <p className="text-xs text-zinc-400">You need to connect your Telegram account to upload and store files.</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => navigate('/login')}
+                className="bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold px-4 py-2 rounded-lg transition-all shrink-0"
+              >
+                Connect Now
+              </button>
+            </div>
+          )}
+
           {/* Toolbar */}
           <div className="flex items-center gap-2.5 mb-5">
             {!isTrash ? (
               <>
-                <button onClick={()=>fileRef.current?.click()}
-                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition-all shadow-lg shadow-indigo-500/20">
+                <button 
+                  onClick={() => tgConnected ? fileRef.current?.click() : showToast('Connect Telegram first', 'error')}
+                  className={`flex items-center gap-2 font-semibold px-4 py-2.5 rounded-xl text-sm transition-all shadow-lg ${tgConnected ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/20' : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'}`}
+                >
                   <Upload size={15}/> Upload
                 </button>
                 <input ref={fileRef} type="file" multiple className="hidden" onChange={e=>handleUpload(e.target.files)}/>
