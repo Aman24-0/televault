@@ -194,19 +194,28 @@ export default function Dashboard() {
     showToast(`${selected.size} items moved to Trash`)
   }
 
-  // Trash specific actions
+// Trash specific actions
   const restoreItem = async (id, type) => {
-    const ep = type === 'folder' ? `/api/folders/${id}/restore` : `/api/files/${id}/restore`
-    await api.post(ep)
-    loadTrash()
-    showToast('Item restored successfully')
+    try {
+      // ✅ Naya endpoint jo backend ke @router.post("/restore/{item_id}") se match karta hai
+      await api.post(`/api/restore/${id}?type=${type}`)
+      loadTrash()
+      showToast('Item restored successfully')
+    } catch (err) {
+      showToast('Failed to restore item', 'error')
+    }
   }
 
   const emptyTrash = async () => {
     if (!confirm('Are you sure you want to permanently delete ALL items in Trash? This cannot be undone.')) return
-    await api.post('/api/trash/empty')
-    loadTrash()
-    showToast('Trash emptied permanently')
+    try {
+      // ✅ Naya endpoint jo backend ke @router.delete("/trash") se match karta hai
+      await api.delete('/api/trash')
+      loadTrash()
+      showToast('Trash emptied permanently')
+    } catch (err) {
+      showToast('Failed to empty trash', 'error')
+    }
   }
 
   const startRename = (item, type) => { setRenaming({id:item.id,type}); setRenameVal(item.name) }
