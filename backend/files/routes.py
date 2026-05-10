@@ -72,31 +72,22 @@ async def update_folder(folder_id: str, body: FolderUpdate, user=Depends(get_cur
 async def delete_folder(folder_id: str, permanent: bool = False, user=Depends(get_current_user)):
     pool = await get_db()
     async with pool.acquire() as db:
-        # Check current status
         row = await db.fetchrow("SELECT parent_id FROM folders WHERE id=$1 AND user_id=$2", folder_id, user["user_id"])
-        if not row: 
-            raise HTTPException(404, "Folder not found")
+        if not row: raise HTTPException(404, "Folder not found")
 
-        # Agar folder pehle se trash me hai ya frontend ne strictly permanent delete bola hai
         if row["parent_id"] == "trash" or permanent:
-            files = await db.fetch(
-                "SELECT telegram_message_id, thumbnail_msg_id FROM files WHERE parent_id=$1 AND user_id=$2",
-                folder_id, user["user_id"]
-            )
+            files = await db.fetch("SELECT telegram_message_id, thumbnail_msg_id FROM files WHERE parent_id=$1 AND user_id=$2", folder_id, user["user_id"])
             msg_ids = []
             for f in files:
                 if f["telegram_message_id"]: msg_ids.append(f["telegram_message_id"])
                 if f["thumbnail_msg_id"]:    msg_ids.append(f["thumbnail_msg_id"])
 
             await db.execute("DELETE FROM folders WHERE id=$1 AND user_id=$2", folder_id, user["user_id"])
-            
             if msg_ids:
                 import asyncio
                 asyncio.create_task(_delete_tg(user["user_id"], msg_ids))
-                
-            return {"deleted": True, "files_removed": len(files), "type": "hard"}
+            return {"deleted": True, "type": "hard"}
         else:
-            # Soft Delete -> Move to Trash
             await db.execute("UPDATE folders SET parent_id='trash' WHERE id=$1 AND user_id=$2", folder_id, user["user_id"])
             return {"deleted": True, "type": "soft"}
 
@@ -119,7 +110,6 @@ async def search_files(q: str, user=Depends(get_current_user)):
     pool = await get_db()
     pattern = f"%{q}%"
     async with pool.acquire() as db:
-        # Trash files ko search results se exclude kar diya gaya hai
         files   = await db.fetch(
             "SELECT * FROM files WHERE user_id=$1 AND upload_status='completed' AND name ILIKE $2 AND parent_id != 'trash'",
             user["user_id"], pattern
@@ -159,13 +149,9 @@ async def update_file(file_id: str, body: FileUpdate, user=Depends(get_current_u
 async def delete_file(file_id: str, permanent: bool = False, user=Depends(get_current_user)):
     pool = await get_db()
     async with pool.acquire() as db:
-        row = await db.fetchrow(
-            "SELECT parent_id, telegram_message_id, thumbnail_msg_id FROM files WHERE id=$1 AND user_id=$2",
-            file_id, user["user_id"]
-        )
+        row = await db.fetchrow("SELECT parent_id, telegram_message_id, thumbnail_msg_id FROM files WHERE id=$1 AND user_id=$2", file_id, user["user_id"])
         if not row: raise HTTPException(404, "File not found")
 
-        # Agar file pehle se trash me hai ya strictly permanent delete bola gaya hai
         if row["parent_id"] == "trash" or permanent:
             await db.execute("DELETE FROM files WHERE id=$1 AND user_id=$2", file_id, user["user_id"])
             msg_ids = [x for x in [row["telegram_message_id"], row["thumbnail_msg_id"]] if x]
@@ -174,7 +160,6 @@ async def delete_file(file_id: str, permanent: bool = False, user=Depends(get_cu
                 asyncio.create_task(_delete_tg(user["user_id"], msg_ids))
             return {"deleted": True, "type": "hard"}
         else:
-            # Soft Delete -> Move to Trash
             await db.execute("UPDATE files SET parent_id='trash' WHERE id=$1 AND user_id=$2", file_id, user["user_id"])
             return {"deleted": True, "type": "soft"}
 
@@ -222,9 +207,10 @@ async def breadcrumb(folder_id: str, user=Depends(get_current_user)):
     return {"breadcrumb": crumbs}
 
 
+# ── Trash & Restore ──────────────────────────────────────────
+
 @router.get("/trash")
 async def get_trash(user=Depends(get_current_user)):
-    # Trash route me sirf un files/folders ko lana jinka parent_id 'trash' hai
     pool = await get_db()
     async with pool.acquire() as db:
         files = await db.fetch("SELECT * FROM files WHERE user_id=$1 AND parent_id='trash' ORDER BY created_at DESC", user["user_id"])
@@ -234,15 +220,17 @@ async def get_trash(user=Depends(get_current_user)):
 
 @router.delete("/trash")
 async def empty_trash(user=Depends(get_current_user)):
-    # Empty trash ka logic
+    """Permanently delete all items in trash"""
     pool = await get_db()
     async with pool.acquire() as db:
+        # Get all message IDs for cleanup
         files = await db.fetch("SELECT telegram_message_id, thumbnail_msg_id FROM files WHERE user_id=$1 AND parent_id='trash'", user["user_id"])
         msg_ids = []
         for f in files:
             if f["telegram_message_id"]: msg_ids.append(f["telegram_message_id"])
             if f["thumbnail_msg_id"]:    msg_ids.append(f["thumbnail_msg_id"])
 
+        # Delete from DB
         await db.execute("DELETE FROM files WHERE user_id=$1 AND parent_id='trash'", user["user_id"])
         await db.execute("DELETE FROM folders WHERE user_id=$1 AND parent_id='trash'", user["user_id"])
 
@@ -250,8 +238,20 @@ async def empty_trash(user=Depends(get_current_user)):
             import asyncio
             asyncio.create_task(_delete_tg(user["user_id"], msg_ids))
 
-    return {"deleted": len(files)}
+    return {"success": True, "deleted_count": len(files)}
 
+
+@router.post("/restore/{item_id}")
+async def restore_item(item_id: str, type: str, user=Depends(get_current_user)):
+    """Restore file or folder from trash to root"""
+    pool = await get_db()
+    table = "files" if type == "file" else "folders"
+    async with pool.acquire() as db:
+        await db.execute(f"UPDATE {table} SET parent_id='root' WHERE id=$1 AND user_id=$2", item_id, user["user_id"])
+    return {"success": True}
+
+
+# ── Helpers ──────────────────────────────────────────────────
 
 async def _delete_tg(user_id: str, msg_ids: list):
     try:
