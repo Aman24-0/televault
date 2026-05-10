@@ -1,33 +1,26 @@
 """
-TeleVault v2 - Telegram Storage Operations
-
-Storage target (in priority order):
-  1. TELEGRAM_CHANNEL_ID from .env  → your private channel
-  2. Fallback → "me" (Saved Messages)
-
-Channel ID must be the full integer form: -1001234567890
-Telethon handles negative int channel IDs natively.
+TeleVault v2 - Telegram Storage Operations (PostgreSQL version)
 """
 import io
 from telethon import TelegramClient
 from telethon.tl.types import DocumentAttributeFilename
 from core.telegram_pool import get_client
-from core.database import get_db
-from config import TELEGRAM_CHANNEL_ID
 
-# Resolve storage target once at import time
-# If channel ID set → use channel, else → Saved Messages
-STORAGE_ENTITY = TELEGRAM_CHANNEL_ID if TELEGRAM_CHANNEL_ID else "me"
+STORAGE_ENTITY = "me"
 
 
 async def _get_user_client(user_id: str) -> TelegramClient:
-    db = await get_db()
-    row = await (await db.execute(
-        "SELECT session FROM users WHERE id=?", (user_id,)
-    )).fetchone()
+    """Get Telegram client for user — fetches session from PostgreSQL"""
+    from core.database import get_db
+    pool = await get_db()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT session FROM users WHERE id=$1", user_id
+        )
     if not row:
-        raise ValueError("User not found")
-    return await get_client(user_id, row["session"])
+        raise ValueError(f"User not found: {user_id}")
+    session_str = row["session"]
+    return await get_client(user_id, session_str)
 
 
 async def upload_file(
@@ -56,19 +49,14 @@ async def upload_file(
 
 
 async def upload_thumbnail(user_id: str, thumb_bytes: bytes, filename: str) -> int:
-    client  = await _get_user_client(user_id)
-    obj     = io.BytesIO(thumb_bytes)
+    client   = await _get_user_client(user_id)
+    obj      = io.BytesIO(thumb_bytes)
     obj.name = f"thumb_{filename}"
-    msg = await client.send_file(
-        STORAGE_ENTITY,
-        obj,
-        caption=f"🖼 thumb:{filename}"
-    )
+    msg = await client.send_file(STORAGE_ENTITY, obj, caption=f"🖼 thumb:{filename}")
     return msg.id
 
 
 async def stream_file(user_id: str, message_id: int):
-    """Async generator — streams file chunks directly from Telegram."""
     client  = await _get_user_client(user_id)
     message = await client.get_messages(STORAGE_ENTITY, ids=message_id)
     if not message or not message.media:
