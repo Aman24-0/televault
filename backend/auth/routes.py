@@ -114,18 +114,26 @@ async def verify_otp_route(body: VerifyOTPRequest, user_token: Optional[str] = N
     pool = await get_db()
     async with pool.acquire() as db:
         if target_user_id:
+            # FIX: Clear out any old legacy accounts holding this phone number or tg_user_id
+            # to prevent asyncpg.exceptions.UniqueViolationError
+            await db.execute(
+                "UPDATE users SET phone = phone || '_legacy_' || id, tg_user_id = NULL WHERE (phone=$1 OR tg_user_id=$2) AND id != $3",
+                phone, tg_user_id, target_user_id
+            )
+            
             await db.execute(
                 "UPDATE users SET session=$1, tg_user_id=$2, phone=$3, first_name=$4 WHERE id=$5",
                 session_str, tg_user_id, phone, first_name, target_user_id
             )
             user_id = target_user_id
         else:
-            existing = await db.fetchrow("SELECT id FROM users WHERE tg_user_id=$1", tg_user_id)
+            # Also prevent duplicate key errors here by checking both tg_user_id and phone
+            existing = await db.fetchrow("SELECT id FROM users WHERE tg_user_id=$1 OR phone=$2", tg_user_id, phone)
             if existing:
                 user_id = existing["id"]
                 await db.execute(
-                    "UPDATE users SET session=$1, first_name=$2, phone=$3 WHERE id=$4",
-                    session_str, first_name, phone, user_id
+                    "UPDATE users SET session=$1, first_name=$2, tg_user_id=$3, phone=$4 WHERE id=$5",
+                    session_str, first_name, tg_user_id, phone, user_id
                 )
             else:
                 user_id = secrets.token_urlsafe(16)
