@@ -55,6 +55,11 @@ export default function Dashboard() {
   const [sortBy, setSortBy]         = useState('name')
   const [sortOrder, setSortOrder]   = useState('asc')
 
+  // NEW: Move & Copy Modal States
+  const [actionModal, setActionModal] = useState(null) // { action: 'move'|'copy', item, itemType: 'file'|'folder' }
+  const [allFoldersList, setAllFoldersList] = useState([])
+  const [destFolder, setDestFolder] = useState('root')
+
   const fileRef = useRef()
   const userId  = localStorage.getItem('tv_user_id')
   const name    = localStorage.getItem('tv_name') || 'User'
@@ -128,8 +133,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fn = (e) => {
-      if (e.target.tagName === 'INPUT') return
-      if (e.key === 'Escape') { setSearchRes(null); setSearchQ(''); setSelected(new Set()) }
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return
+      if (e.key === 'Escape') { setSearchRes(null); setSearchQ(''); setSelected(new Set()); setActionModal(null); }
       if (activeTab === 'files' && e.key === 'n' && (e.ctrlKey||e.metaKey)) { e.preventDefault(); setNewFolder(true) }
       if (activeTab === 'files' && e.key === 'u' && (e.ctrlKey||e.metaKey)) { e.preventDefault(); fileRef.current?.click() }
     }
@@ -194,10 +199,8 @@ export default function Dashboard() {
     showToast(`${selected.size} items moved to Trash`)
   }
 
-// Trash specific actions
   const restoreItem = async (id, type) => {
     try {
-      // ✅ Naya endpoint jo backend ke @router.post("/restore/{item_id}") se match karta hai
       await api.post(`/api/restore/${id}?type=${type}`)
       loadTrash()
       showToast('Item restored successfully')
@@ -209,7 +212,6 @@ export default function Dashboard() {
   const emptyTrash = async () => {
     if (!confirm('Are you sure you want to permanently delete ALL items in Trash? This cannot be undone.')) return
     try {
-      // ✅ Naya endpoint jo backend ke @router.delete("/trash") se match karta hai
       await api.delete('/api/trash')
       loadTrash()
       showToast('Trash emptied permanently')
@@ -247,6 +249,36 @@ export default function Dashboard() {
       return n
     })
   }
+
+  // --- NEW: Move & Copy Functionality ---
+  const openActionModal = async (item, itemType, action) => {
+    setActionModal({ action, item, itemType });
+    setDestFolder(current);
+    try {
+      const r = await api.get('/api/folders?all=true');
+      setAllFoldersList(r.data.folders || []);
+    } catch(e) { console.error(e) }
+  }
+
+  const submitAction = async () => {
+    if (!actionModal) return;
+    const { action, item, itemType } = actionModal;
+    try {
+      if (action === 'move') {
+        const ep = itemType === 'folder' ? `/api/folders/${item.id}` : `/api/files/${item.id}`;
+        await api.patch(ep, { parent_id: destFolder });
+        showToast(`${itemType === 'folder' ? 'Folder' : 'File'} moved successfully!`);
+      } else if (action === 'copy' && itemType === 'file') {
+        await api.post(`/api/files/${item.id}/copy`, { parent_id: destFolder });
+        showToast('File copied instantly!');
+      }
+      setActionModal(null);
+      loadFolder(current);
+    } catch(e) { 
+      showToast(`Failed to ${action}`, 'error'); 
+    }
+  }
+  // ----------------------------------------
 
   const displayFolders = searchRes ? searchRes.folders : folders
   const displayFiles   = searchRes ? searchRes.files   : files
@@ -504,7 +536,7 @@ export default function Dashboard() {
                   onOpen={()=>setCurrent(f.id)}
                   onRename={()=>startRename(f,'folder')}
                   onDelete={()=>deleteFolder(f.id)}
-                  onMove={()=>{}}
+                  onMove={()=>openActionModal(f, 'folder', 'move')} // Updated
                   onRestore={()=>restoreItem(f.id, 'folder')}
                   isTrash={isTrash}
                   isSelected={selected.has(f.id)}
@@ -519,7 +551,8 @@ export default function Dashboard() {
                   onRename={()=>startRename(f,'file')}
                   onDelete={()=>deleteFile(f.id)}
                   onShare={()=>openShare(f)}
-                  onMove={()=>{}}
+                  onMove={()=>openActionModal(f, 'file', 'move')} // Updated
+                  onCopy={()=>openActionModal(f, 'file', 'copy')} // NEW for FileCard
                   onRestore={()=>restoreItem(f.id, 'file')}
                   isTrash={isTrash}
                   isSelected={selected.has(f.id)}
@@ -563,6 +596,7 @@ export default function Dashboard() {
                       </button>
                     ) : (
                       <>
+                        <button onClick={e=>{e.stopPropagation();openActionModal(f,'folder','move')}} className="text-zinc-600 hover:text-amber-400 transition-colors p-1" title="Move"><Move size={13}/></button>
                         <button onClick={e=>{e.stopPropagation();startRename(f,'folder')}} className="text-zinc-600 hover:text-white transition-colors p-1"><span className="text-xs">✏️</span></button>
                         <button onClick={e=>{e.stopPropagation();deleteFolder(f.id)}} className="text-zinc-600 hover:text-red-400 transition-colors p-1"><Trash2 size={13}/></button>
                       </>
@@ -595,10 +629,12 @@ export default function Dashboard() {
                       </button>
                     ) : (
                       <>
-                        <button onClick={async e=>{e.stopPropagation();const r=await fetch(`${API}/api/download/${f.id}`,{headers:{Authorization:`Bearer ${localStorage.getItem('tv_token')}`}});const b=await r.blob();const u=URL.createObjectURL(b);Object.assign(document.createElement('a'),{href:u,download:f.name}).click();URL.revokeObjectURL(u)}} className="text-zinc-600 hover:text-emerald-400 transition-colors p-1 text-xs">⬇️</button>
-                        <button onClick={e=>{e.stopPropagation();openShare(f)}} className="text-zinc-600 hover:text-blue-400 transition-colors p-1"><Share2 size={13}/></button>
-                        <button onClick={e=>{e.stopPropagation();startRename(f,'file')}} className="text-zinc-600 hover:text-white transition-colors p-1 text-xs">✏️</button>
-                        <button onClick={e=>{e.stopPropagation();deleteFile(f.id)}} className="text-zinc-600 hover:text-red-400 transition-colors p-1"><Trash2 size={13}/></button>
+                        <button onClick={async e=>{e.stopPropagation();const r=await fetch(`${API}/api/download/${f.id}`,{headers:{Authorization:`Bearer ${localStorage.getItem('tv_token')}`}});const b=await r.blob();const u=URL.createObjectURL(b);Object.assign(document.createElement('a'),{href:u,download:f.name}).click();URL.revokeObjectURL(u)}} className="text-zinc-600 hover:text-emerald-400 transition-colors p-1 text-xs" title="Download">⬇️</button>
+                        <button onClick={e=>{e.stopPropagation();openShare(f)}} className="text-zinc-600 hover:text-blue-400 transition-colors p-1" title="Share"><Share2 size={13}/></button>
+                        <button onClick={e=>{e.stopPropagation();openActionModal(f,'file','copy')}} className="text-zinc-600 hover:text-emerald-400 transition-colors p-1" title="Copy"><Copy size={13}/></button>
+                        <button onClick={e=>{e.stopPropagation();openActionModal(f,'file','move')}} className="text-zinc-600 hover:text-amber-400 transition-colors p-1" title="Move"><Move size={13}/></button>
+                        <button onClick={e=>{e.stopPropagation();startRename(f,'file')}} className="text-zinc-600 hover:text-white transition-colors p-1 text-xs" title="Rename">✏️</button>
+                        <button onClick={e=>{e.stopPropagation();deleteFile(f.id)}} className="text-zinc-600 hover:text-red-400 transition-colors p-1" title="Delete"><Trash2 size={13}/></button>
                       </>
                     )}
                   </div>
@@ -673,6 +709,44 @@ export default function Dashboard() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* NEW: Move & Copy Modal */}
+      <AnimatePresence>
+        {actionModal && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[260] px-4"
+            onClick={()=>setActionModal(null)}>
+            <motion.div initial={{scale:0.9,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.9,opacity:0}}
+              className="bg-[#18181b] border border-white/8 rounded-3xl p-6 w-full max-w-sm shadow-2xl"
+              onClick={e=>e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="font-bold text-white flex items-center gap-2 text-base capitalize">
+                  {actionModal.action === 'move' ? <Move size={16} className="text-amber-400"/> : <Copy size={16} className="text-emerald-400"/>}
+                  {actionModal.action} {actionModal.itemType}
+                </h3>
+                <button onClick={()=>setActionModal(null)} className="text-zinc-500 hover:text-white"><X size={18}/></button>
+              </div>
+              <p className="text-zinc-400 text-sm mb-4 truncate">Select destination for <b>{actionModal.item.name}</b>:</p>
+
+              <select value={destFolder} onChange={e=>setDestFolder(e.target.value)}
+                className="w-full bg-[#09090b] border border-white/8 rounded-xl px-3 py-3 text-sm text-zinc-200 outline-none mb-5 focus:border-indigo-500/50 transition-all cursor-pointer">
+                <option value="root">📁 My Drive (Root)</option>
+                {allFoldersList.map(fol => (
+                  <option key={fol.id} value={fol.id} disabled={fol.id === actionModal.item.id}>
+                    ↳ {fol.name}
+                  </option>
+                ))}
+              </select>
+
+              <div className="flex gap-3">
+                <button onClick={()=>setActionModal(null)} className="flex-1 bg-white/5 hover:bg-white/10 border border-white/6 text-white py-2.5 rounded-xl text-sm transition-all font-semibold">Cancel</button>
+                <button onClick={submitAction} className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-xl text-sm transition-all font-semibold capitalize">{actionModal.action}</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   )
 }

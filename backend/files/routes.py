@@ -31,13 +31,17 @@ class ShareToggle(BaseModel):
 # ── Folders ─────────────────────────────────────────────────
 
 @router.get("/folders")
-async def list_folders(parent_id: str = "root", user=Depends(get_current_user)):
+async def list_folders(parent_id: str = "root", all: bool = False, user=Depends(get_current_user)):
     pool = await get_db()
     async with pool.acquire() as db:
-        rows = await db.fetch(
-            "SELECT * FROM folders WHERE user_id=$1 AND parent_id=$2 ORDER BY name",
-            user["user_id"], parent_id
-        )
+        if all:
+            # Move/Copy dropdown ke liye saare folders fetch karne ke liye
+            rows = await db.fetch("SELECT * FROM folders WHERE user_id=$1 AND parent_id != 'trash' ORDER BY name", user["user_id"])
+        else:
+            rows = await db.fetch(
+                "SELECT * FROM folders WHERE user_id=$1 AND parent_id=$2 ORDER BY name",
+                user["user_id"], parent_id
+            )
     return {"folders": await rows_to_list(rows)}
 
 
@@ -145,6 +149,30 @@ async def update_file(file_id: str, body: FileUpdate, user=Depends(get_current_u
     return await row_to_dict(row)
 
 
+@router.post("/files/{file_id}/copy")
+async def copy_file(file_id: str, body: FileUpdate = None, user=Depends(get_current_user)):
+    """Smart Copy (Zero storage cost)"""
+    pool = await get_db()
+    async with pool.acquire() as db:
+        row = await db.fetchrow("SELECT * FROM files WHERE id=$1 AND user_id=$2", file_id, user["user_id"])
+        if not row: raise HTTPException(404, "File not found")
+
+        new_id = secrets.token_urlsafe(12)
+        new_name = f"Copy of {row['name']}"
+        target_parent = body.parent_id if body and body.parent_id else row['parent_id']
+
+        query = """
+            INSERT INTO files (id, name, original_name, extension, mime_type, size_bytes, parent_id, user_id, telegram_message_id, telegram_file_id, thumbnail_msg_id, upload_status)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *
+        """
+        new_row = await db.fetchrow(
+            query, new_id, new_name, row["original_name"], row["extension"], row["mime_type"],
+            row["size_bytes"], target_parent, user["user_id"], row["telegram_message_id"],
+            row["telegram_file_id"], row["thumbnail_msg_id"], row["upload_status"]
+        )
+    return await row_to_dict(new_row)
+
+
 @router.delete("/files/{file_id}")
 async def delete_file(file_id: str, permanent: bool = False, user=Depends(get_current_user)):
     pool = await get_db()
@@ -223,14 +251,12 @@ async def empty_trash(user=Depends(get_current_user)):
     """Permanently delete all items in trash"""
     pool = await get_db()
     async with pool.acquire() as db:
-        # Get all message IDs for cleanup
         files = await db.fetch("SELECT telegram_message_id, thumbnail_msg_id FROM files WHERE user_id=$1 AND parent_id='trash'", user["user_id"])
         msg_ids = []
         for f in files:
             if f["telegram_message_id"]: msg_ids.append(f["telegram_message_id"])
             if f["thumbnail_msg_id"]:    msg_ids.append(f["thumbnail_msg_id"])
 
-        # Delete from DB
         await db.execute("DELETE FROM files WHERE user_id=$1 AND parent_id='trash'", user["user_id"])
         await db.execute("DELETE FROM folders WHERE user_id=$1 AND parent_id='trash'", user["user_id"])
 
@@ -243,7 +269,6 @@ async def empty_trash(user=Depends(get_current_user)):
 
 @router.post("/restore/{item_id}")
 async def restore_item(item_id: str, type: str, user=Depends(get_current_user)):
-    """Restore file or folder from trash to root"""
     pool = await get_db()
     table = "files" if type == "file" else "folders"
     async with pool.acquire() as db:
