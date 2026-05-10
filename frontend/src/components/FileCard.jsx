@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { Image, Film, Music, Archive, FileText, Download, Share2, Trash2, Edit2, Move, CheckSquare, Square, Loader2, RotateCcw } from 'lucide-react'
+import { Image, Film, Music, Archive, FileText, Download, Share2, Trash2, Edit2, Move, Copy, CheckSquare, Square, Loader2, RotateCcw } from 'lucide-react'
 import { formatSize, fileTypeInfo, thumbCache } from '../lib/utils'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-export default function FileCard({ file, onView, onRename, onDelete, onShare, onMove, onRestore, isTrash, index=0, renaming, renameVal, setRenameVal, doRename, cancelRename, isSelected, onToggleSelect }) {
+export default function FileCard({ file, onView, onRename, onDelete, onShare, onMove, onCopy, onRestore, isTrash, index=0, renaming, renameVal, setRenameVal, doRename, cancelRename, isSelected, onToggleSelect }) {
   const [menu,  setMenu]  = useState(false)
   const [thumb, setThumb] = useState(thumbCache[file.id] || null)
   const [tl,    setTl]    = useState(!thumbCache[file.id] && !!file.thumbnail_msg_id)
@@ -100,6 +100,7 @@ export default function FileCard({ file, onView, onRename, onDelete, onShare, on
               {[
                 { icon:<Download size={12}/>, label:'Download', fn:()=>{download();setMenu(false)} },
                 { icon:<Share2 size={12}/>,   label:'Share',    fn:()=>{onShare();setMenu(false)} },
+                { icon:<Copy size={12}/>,     label:'Copy',     fn:()=>{onCopy && onCopy();setMenu(false)} },
                 { icon:<Move size={12}/>,     label:'Move',     fn:()=>{onMove();setMenu(false)} },
                 { icon:<Edit2 size={12}/>,    label:'Rename',   fn:()=>{onRename();setMenu(false)} },
               ].map(it=>(
