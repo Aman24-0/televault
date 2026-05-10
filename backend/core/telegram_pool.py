@@ -50,12 +50,18 @@ async def verify_otp(phone: str, code: str, phone_code_hash: str, password: str 
     
     try:
         from telethon.errors import SessionPasswordNeededError
-        try:
-            await client.sign_in(phone=phone, code=code, phone_code_hash=phone_code_hash)
-        except SessionPasswordNeededError:
-            if not password:
-                raise ValueError("2FA_REQUIRED")
+        
+        if password:
+            # Step 2FA: The client has already verified the OTP in the previous request
+            # and is now waiting for the 2FA password.
             await client.sign_in(password=password)
+        else:
+            # Step OTP: Verify the code first
+            try:
+                await client.sign_in(phone=phone, code=code, phone_code_hash=phone_code_hash)
+            except SessionPasswordNeededError:
+                # Catch the error and tell the frontend to ask for a password
+                raise ValueError("2FA_REQUIRED")
         
         me = await client.get_me()
         session_string = client.session.save()
