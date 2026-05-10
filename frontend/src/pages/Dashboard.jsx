@@ -7,6 +7,8 @@ import {
   LogOut, Copy, Share2, CheckCircle, Trash2, Move,
   AlertCircle, RotateCcw
 } from 'lucide-react'
+import { auth } from '../lib/firebase'
+import { signOut } from 'firebase/auth'
 import api from '../api'
 import FileCard from '../components/FileCard'
 import FolderCard from '../components/FolderCard'
@@ -303,7 +305,11 @@ export default function Dashboard() {
 
         <div className="flex items-center gap-2 shrink-0">
           <span className="text-zinc-600 text-xs hidden sm:block">Hi, {name}</span>
-          <button onClick={()=>{localStorage.clear();navigate('/login')}} title="Logout"
+          <button onClick={async () => {
+              try { await signOut(auth) } catch (e) {}
+              localStorage.clear()
+              navigate('/login')
+            }} title="Logout"
             className="text-zinc-500 hover:text-white bg-white/4 hover:bg-white/8 p-2 rounded-xl transition-all">
             <LogOut size={15}/>
           </button>
