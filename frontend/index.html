@@ -2,39 +2,25 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-
-  <!-- PWA -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1"/>
   <meta name="theme-color" content="#6366f1"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="TeleVault"/>
   <meta name="mobile-web-app-capable" content="yes"/>
-  <meta name="application-name" content="TeleVault"/>
   <meta name="description" content="Unlimited cloud storage via Telegram"/>
-
-  <!-- Open Graph -->
-  <meta property="og:title" content="TeleVault"/>
-  <meta property="og:description" content="Unlimited cloud storage via Telegram"/>
-  <meta property="og:type" content="website"/>
-  <meta property="og:image" content="/icons/icon-512.png"/>
-
-  <!-- Apple Icons -->
   <link rel="apple-touch-icon" href="/icons/icon-192.png"/>
-  <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png"/>
-  <link rel="apple-touch-icon" sizes="144x144" href="/icons/icon-144.png"/>
-  <link rel="apple-touch-icon" sizes="128x128" href="/icons/icon-128.png"/>
-
-  <!-- Manifest & Favicon -->
   <link rel="manifest" href="/manifest.json"/>
   <link rel="icon" type="image/png" sizes="96x96" href="/icons/icon-96.png"/>
-
-  <!-- Fonts -->
+  <!-- Inter Font -->
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet"/>
   <title>TeleVault</title>
-  <style>html,body{background:#09090b}</style>
+  <style>
+    html, body { background: #050505; margin: 0; padding: 0; }
+    #root { min-height: 100dvh; }
+  </style>
 </head>
 <body>
   <div id="root"></div>
