@@ -21,10 +21,10 @@ const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 const Skeleton = () => (
   <div className="glass-card rounded-3xl overflow-hidden">
-    <div className="h-36 bg-white/5 animate-pulse"/>
+    <div className="h-36 skeleton"/>
     <div className="p-4 space-y-2">
-      <div className="h-3 bg-white/5 rounded-lg w-3/4 animate-pulse"/>
-      <div className="h-2 bg-white/5 rounded-lg w-1/3 animate-pulse"/>
+      <div className="h-3 skeleton rounded-lg w-3/4"/>
+      <div className="h-2 skeleton rounded-lg w-1/3 mt-1"/>
     </div>
   </div>
 )
@@ -468,10 +468,10 @@ export default function Dashboard() {
       {/* FLOATING HEADER */}
       <header className="m-4 md:m-6 rounded-3xl glass-panel shrink-0 h-16 flex items-center gap-4 px-6 z-50 relative">
         <div className="flex items-center gap-3 shrink-0">
-          <div className="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-2 rounded-xl shadow-[0_0_15px_rgba(99,102,241,0.5)]">
+          <div className="logo-icon bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 p-2 rounded-xl cursor-pointer" onClick={()=>{setCurrent('root');setActiveTab('files')}}>
             <CloudLightning size={18} className="text-white"/>
           </div>
-          <span className="text-xl font-extrabold text-white tracking-tight hidden sm:block">TeleVault</span>
+          <span className="text-lg font-black text-white tracking-tight hidden sm:block bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">TeleVault</span>
         </div>
 
         <div className="flex-1 max-w-xl mx-auto relative">
@@ -570,7 +570,7 @@ export default function Dashboard() {
               <>
                 <button 
                   onClick={() => tgConnected ? fileRef.current?.click() : showToast('Connect Telegram first', 'error')}
-                  className={`flex items-center gap-2 font-bold px-6 py-3 rounded-2xl text-sm transition-all shadow-lg ${tgConnected ? 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-[0_0_20px_rgba(99,102,241,0.4)] hover:-translate-y-0.5' : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'}`}
+                  className={`btn-glow flex items-center gap-2 font-bold px-6 py-3 rounded-2xl text-sm transition-all shadow-lg ${tgConnected ? 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-[0_0_20px_rgba(99,102,241,0.4)] hover:-translate-y-0.5' : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'}`}
                 >
                   <Upload size={16}/> Upload Files
                 </button>
@@ -832,7 +832,7 @@ export default function Dashboard() {
                       </span>
                     </div>
                     <div className="h-1.5 bg-black/60 rounded-full overflow-hidden border border-white/5">
-                      <motion.div animate={{width:`${u.progress}%`}} transition={{duration:0.3}} className={`h-full rounded-full ${u.status==='complete'?'bg-emerald-500':u.status==='failed'?'bg-red-500':'bg-gradient-to-r from-indigo-500 to-purple-500'}`}/>
+                      <motion.div animate={{width:`${u.progress}%`}} transition={{duration:0.3}} className={`h-full rounded-full transition-all ${u.status==='complete'?'bg-emerald-500':u.status==='failed'?'bg-red-500':'progress-bar'}`}/>
                     </div>
                   </div>
                 ))}
