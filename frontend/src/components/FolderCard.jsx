@@ -34,9 +34,10 @@ export default function FolderCard({ folder, onOpen, onRename, onDelete, onMove,
       </button>
 
       {/* Icon with Dynamic Glow */}
-      <div className="relative flex items-center justify-center w-14 h-14 bg-white/5 rounded-2xl border border-white/10 mb-4 mt-2 mx-auto group-hover:scale-110 transition-transform duration-500 overflow-hidden">
-        <div className="absolute inset-0 opacity-20 blur-md transition-opacity duration-500 group-hover:opacity-40" style={{ backgroundColor: folder.color || '#818CF8' }}/>
-        <Folder size={28} className="relative z-10 drop-shadow-md" style={{ color: folder.color || '#818CF8' }}/>
+      <div className="relative flex items-center justify-center w-14 h-14 rounded-2xl mb-4 mt-2 mx-auto group-hover:scale-110 transition-all duration-500 overflow-hidden border border-white/10"
+        style={{ background: `linear-gradient(135deg, ${folder.color || '#818CF8'}15, ${folder.color || '#818CF8'}08)` }}>
+        <div className="absolute inset-0 blur-lg opacity-0 group-hover:opacity-60 transition-opacity duration-500" style={{ backgroundColor: folder.color || '#818CF8' }}/>
+        <Folder size={28} className="relative z-10 folder-glow transition-all duration-300" style={{ color: folder.color || '#818CF8' }}/>
       </div>
 
       {/* Name */}
